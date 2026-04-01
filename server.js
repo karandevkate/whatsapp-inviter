@@ -1,8 +1,9 @@
+
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import pkg from 'whatsapp-web.js';
-const { Client, LocalAuth } = pkg;
+const { Client, NoAuth } = pkg;
 import qrcode from 'qrcode';
 import cors from 'cors';
 
@@ -15,108 +16,89 @@ const io = new Server(httpServer, {
 app.use(cors());
 app.use(express.json());
 
-const state = {
-  qr: null,
-  status: 'DISCONNECTED'
-};
+// Map to store clients per socket connection
+const clients = new Map();
 
-let client = null;
+io.on('connection', (socket) => {
+  console.log(`New user connected: ${socket.id}`);
 
-function createClient() {
-  const c = new Client({
-    authStrategy: new LocalAuth(),  // FIX 1: Use LocalAuth to persist session
+  // Create a dedicated WhatsApp client for this specific user/tab
+  const client = new Client({
+    authStrategy: new NoAuth(),
     puppeteer: {
       headless: true,
       executablePath: '/usr/bin/google-chrome-stable',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--no-zygote',
-        '--single-process'
-      ]
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote']
     }
   });
 
-  c.on('qr', (qr) => {
-    qrcode.toDataURL(qr, (err, url) => {  // FIX 2: use 'url' not 'qrCodeData'
-      if (err) {
-        console.error('QR generation error:', err);
-        return;
-      }
-      state.qr = url;
-      state.status = 'QR_RECEIVED';
-      io.emit('status', { status: state.status, qr: state.qr });
+  let clientStatus = 'DISCONNECTED';
+
+  client.on('qr', (qr) => {
+    qrcode.toDataURL(qr, (err, url) => {
+      clientStatus = 'QR_RECEIVED';
+      socket.emit('status', { status: clientStatus, qr: url });
     });
   });
 
-  c.on('ready', () => {
-    state.qr = null;
-    state.status = 'READY';
-    io.emit('status', { status: state.status });
-    console.log('WhatsApp Client is ready!');
+  client.on('ready', () => {
+    clientStatus = 'READY';
+    socket.emit('status', { status: clientStatus });
+    console.log(`Client for ${socket.id} is ready!`);
   });
 
-  c.on('disconnected', () => {
-    state.status = 'DISCONNECTED';
-    state.qr = null;
-    io.emit('status', { status: state.status });
+  client.on('disconnected', () => {
+    clientStatus = 'DISCONNECTED';
+    socket.emit('status', { status: clientStatus });
   });
 
-  return c;
-}
-
-io.on('connection', (socket) => {
-  socket.emit('status', { status: state.status, qr: state.qr });
-
-  socket.on('logout', async () => {
-    try {
-      if (client) {
-        await client.logout();
-        await client.destroy();
-      }
-    } catch (err) {
-      console.error('Logout error:', err.message);
-    } finally {
-      state.status = 'DISCONNECTED';
-      state.qr = null;
-      io.emit('status', { status: state.status });
-      // Recreate and reinitialize client cleanly
-      client = createClient();
-      client.initialize().catch(e => console.error('Re-init Error:', e.message));
-    }
-  });
-
+  // Handle Bulk Sending for this specific client
   socket.on('send-bulk', async (data) => {
     const { candidates, message, groupLink, countryCode } = data;
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i];
-      let fullPhone = candidate.phone.toString().replace(/\D/g, ''); // strip non-digits
+      let fullPhone = candidate.phone;
       if (fullPhone.length <= 10 && !fullPhone.startsWith(countryCode)) {
         fullPhone = countryCode + fullPhone;
       }
-      const personalizedMessage = message
-        .replace(/\[Name\]/g, candidate.name)
-        .replace(/\[Link\]/g, groupLink || '');
+      const personalizedMessage = message.replace(/\[Name\]/g, candidate.name).replace(/\[Link\]/g, groupLink);
       try {
         await client.sendMessage(`${fullPhone}@c.us`, personalizedMessage);
-        io.emit('message-sent', { index: i, status: 'sent' });
-        console.log(`Sent to ${fullPhone}`);
+        socket.emit('message-sent', { index: i, status: 'sent' });
         await new Promise(r => setTimeout(r, 3000 + Math.random() * 2000));
       } catch (err) {
-        console.error(`Failed to send to ${fullPhone}:`, err.message);
-        io.emit('message-sent', { index: i, status: 'error' });
+        socket.emit('message-sent', { index: i, status: 'error' });
       }
     }
-    io.emit('bulk-finished');
+    socket.emit('bulk-finished');
   });
+
+  socket.on('logout', async () => {
+    try {
+      await client.logout();
+      await client.destroy();
+      socket.emit('status', { status: 'DISCONNECTED' });
+      client.initialize();
+    } catch (err) {
+      console.log("Logout error, re-initializing...");
+      client.initialize();
+    }
+  });
+
+  // Cleanup when user closes the browser tab
+  socket.on('disconnect', async () => {
+    console.log(`User disconnected: ${socket.id}. Cleaning up resources...`);
+    try {
+      await client.destroy();
+    } catch (e) {}
+    clients.delete(socket.id);
+  });
+
+  // Start the client for this user
+  client.initialize().catch(e => console.error('Init Error:', e));
+  clients.set(socket.id, client);
 });
 
-// Initialize once cleanly
-client = createClient();
-console.log('Initializing WhatsApp client...');
-client.initialize().catch(e => console.error('CRITICAL: Failed to initialize WhatsApp client:', e.message));
-
 httpServer.listen(3001, () => {
-  console.log('Automation server running on port 3001');
+  console.log('Multi-Session server running on port 3001');
 });
