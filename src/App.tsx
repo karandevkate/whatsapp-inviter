@@ -21,8 +21,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 import { io } from 'socket.io-client';
 
-// Automatically detect the server IP based on the browser's URL
-const socket = io(`${window.location.protocol}//${window.location.hostname}:3001`);
+const socket = io('http://localhost:3001');
 
 interface Candidate {
   name: string;
@@ -38,7 +37,7 @@ export default function App() {
   const [message, setMessage] = useState('Hello [Name], Welcome from First Quad. Please join the below WhatsApp group: [Link]');
   const [isSending, setIsSending] = useState(false);
   const [isSent, setIsSent] = useState(false);
-  
+
   const [automationStatus, setAutomationStatus] = useState('DISCONNECTED');
   const [qrCode, setQrCode] = useState<string | null>(null);
 
@@ -49,7 +48,7 @@ export default function App() {
     });
 
     socket.on('message-sent', (data) => {
-      setCandidates(prev => prev.map((c, i) => 
+      setCandidates(prev => prev.map((c, i) =>
         i === data.index ? { ...c, status: data.status } : c
       ));
     });
@@ -92,7 +91,7 @@ export default function App() {
           workbook.SheetNames.forEach(sheetName => {
             const worksheet = workbook.Sheets[sheetName];
             const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-            
+
             if (rows.length === 0) return;
 
             let nameIdx = -1;
@@ -128,7 +127,7 @@ export default function App() {
 
               if (nameCandidate && phoneCandidate && isPhone(phoneCandidate)) {
                 if (phoneCandidate.startsWith('0') && phoneCandidate.length >= 10) phoneCandidate = phoneCandidate.substring(1);
-                if (phoneCandidate.length > 10 && phoneCandidate.startsWith('2')) return; 
+                if (phoneCandidate.length > 10 && phoneCandidate.startsWith('2')) return;
                 if (!allFoundCandidates.find(c => c.phone === phoneCandidate)) {
                   allFoundCandidates.push({ name: nameCandidate, phone: phoneCandidate, status: 'pending' });
                 }
@@ -179,7 +178,7 @@ export default function App() {
     <div className="flex flex-col min-h-screen">
       <header className="bg-background border-b border-primary/30 shadow-[0_0_15px_rgba(255,45,120,0.1)] flex justify-between items-center w-full px-6 py-4 sticky top-0 z-50">
         <div className="flex items-center gap-4">
-          <img src="/logo.png" style={{ height: '40px' }} alt="FQTS Logo" />
+          <img src="/logo.png" style="height:30px" alt="FQTS Logo" />
           <span className="text-xl font-bold text-primary neon-text-glow font-headline tracking-tight">
             WhatsApp Automation System
           </span>
@@ -194,7 +193,7 @@ export default function App() {
 
       <main className="flex-grow flex flex-col items-center justify-start p-6 sm:p-12 gap-8">
         <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-5 gap-8">
-          
+
           {/* Left Side: QR Login */}
           <div className="lg:col-span-2 space-y-6">
             <motion.section
@@ -207,7 +206,7 @@ export default function App() {
               </div>
               <h2 className="font-headline font-bold text-xl mb-2 text-slate-100 uppercase tracking-wider">Link WhatsApp</h2>
               <p className="text-slate-400 text-xs mb-8">Scan this code with your WhatsApp Link Devices option to start sending silently.</p>
-              
+
               <div className="bg-white p-4 rounded-xl shadow-inner mb-6 relative group overflow-hidden">
                 {automationStatus === 'READY' ? (
                   <div className="w-48 h-48 flex flex-col items-center justify-center text-green-600 gap-4">
@@ -222,13 +221,14 @@ export default function App() {
                   </div>
                 )}
               </div>
-              
+
               <div className="text-[10px] text-slate-500 uppercase font-label tracking-widest mt-auto">
-                {automationStatus === 'QR_RECEIVED' ? 'New QR Generated' : automationStatus === 'READY' ? 'Authenticated' : 'Initializing Puppeteer...'}
+                {automationStatus === 'QR_RECEIVED' ? 'New QR Generated' : automationStatus === 'READY' ? 'Authenticated' : 'Initializing...'}
               </div>
 
+
               {automationStatus === 'READY' && (
-                <button 
+                <button
                   onClick={disconnectAutomation}
                   className="mt-4 text-[10px] text-red-500 hover:text-red-400 font-bold uppercase tracking-[0.2em] underline decoration-red-500/30 underline-offset-4"
                 >
