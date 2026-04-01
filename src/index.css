@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --font-headline: "Sora", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-label: "Space Grotesk", sans-serif;
+
+  --color-primary: #ff2d78;
+  --color-secondary: #00ffcc;
+  --color-tertiary: #ffe04a;
+  --color-background: #0a0a12;
+  --color-surface: #0f0f1a;
+  --color-surface-container: #141422;
+  --color-surface-container-high: #1e1e30;
+  --color-surface-container-highest: #28283e;
+  --color-outline: #5a5068;
+  --color-outline-variant: #302840;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-slate-200 font-body min-h-screen;
+    background-image: 
+      linear-gradient(rgba(255, 45, 120, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 45, 120, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+}
+
+@layer components {
+  .neon-border {
+    @apply border border-primary/30;
+    box-shadow: inset 0 0 12px rgba(255, 45, 120, 0.1);
+  }
+
+  .neon-text-glow {
+    text-shadow: 0 0 8px currentColor;
+  }
+
+  .neon-button-glow:hover {
+    box-shadow: 0 0 16px rgba(255, 45, 120, 0.4);
+  }
+
+  .neon-secondary-glow {
+    text-shadow: 0 0 8px rgba(0, 255, 204, 0.6);
+  }
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;700;800&family=Inter:wght@400;500;600&family=Space_Grotesk:wght@400;700&display=swap');
