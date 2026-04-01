@@ -21,7 +21,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 import { io } from 'socket.io-client';
 
-const socket = io('http://localhost:3001');
+// Automatically detect the server IP based on the browser's URL
+const socket = io(`${window.location.protocol}//${window.location.hostname}:3001`);
 
 interface Candidate {
   name: string;
