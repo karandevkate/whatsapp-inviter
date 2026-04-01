@@ -19,6 +19,10 @@ const io = new Server(httpServer, {
 app.use(cors());
 app.use(express.json());
 
+// Initialize global variables
+let qrCodeData = null;
+let clientStatus = 'DISCONNECTED';
+
 const client = new Client({
   authStrategy: new NoAuth(),
   puppeteer: {
@@ -35,9 +39,6 @@ const client = new Client({
     ]
   }
 });
-
-let qrCodeData = null; // FIXED: Added missing variable
-let clientStatus = 'DISCONNECTED';
 
 client.on('qr', (qr) => {
   qrcode.toDataURL(qr, (err, url) => {
@@ -79,7 +80,6 @@ io.on('connection', (socket) => {
       clientStatus = 'DISCONNECTED';
       qrCodeData = null;
       io.emit('status', { status: clientStatus });
-      console.log('Re-initializing client...');
       client.initialize();
     } catch (err) {
       console.error('Logout error:', err);
