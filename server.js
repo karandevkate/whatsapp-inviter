@@ -23,6 +23,7 @@ const client = new Client({
   authStrategy: new NoAuth(),
   puppeteer: {
     headless: true,
+    executablePath: '/usr/bin/google-chrome-stable', // Explicit path for EC2
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -35,7 +36,11 @@ const client = new Client({
   }
 });
 
-let qrCodeData = null;
+console.log('Initializing WhatsApp client...');
+client.initialize().catch(err => {
+  console.error('CRITICAL: Failed to initialize WhatsApp client:', err);
+});
+
 let clientStatus = 'DISCONNECTED';
 
 client.on('qr', (qr) => {
