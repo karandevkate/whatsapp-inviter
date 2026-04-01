@@ -10,18 +10,17 @@ import cors from 'cors';
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: {
-    origin: "*", 
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
 app.use(cors());
 app.use(express.json());
 
-// Initialize global variables
-let qrCodeData = null;
-let clientStatus = 'DISCONNECTED';
+// Robust State Management
+const state = {
+  qr: null,
+  status: 'DISCONNECTED'
+};
 
 const client = new Client({
   authStrategy: new NoAuth(),
@@ -32,58 +31,43 @@ const client = new Client({
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--disable-gpu'
+      '--no-zygote'
     ]
   }
 });
 
 client.on('qr', (qr) => {
   qrcode.toDataURL(qr, (err, url) => {
-    qrCodeData = url;
-    clientStatus = 'QR_RECEIVED';
-    io.emit('status', { status: clientStatus, qr: qrCodeData });
+    state.qr = url;
+    state.status = 'QR_RECEIVED';
+    io.emit('status', { status: state.status, qr: state.qr });
   });
 });
 
 client.on('ready', () => {
-  qrCodeData = null;
-  clientStatus = 'READY';
-  io.emit('status', { status: clientStatus });
+  state.qr = null;
+  state.status = 'READY';
+  io.emit('status', { status: state.status });
   console.log('WhatsApp Client is ready!');
 });
 
-client.on('authenticated', () => {
-  console.log('WhatsApp Authenticated!');
-});
-
-client.on('auth_failure', () => {
-  clientStatus = 'AUTH_FAILURE';
-  io.emit('status', { status: clientStatus });
-});
-
 client.on('disconnected', () => {
-  clientStatus = 'DISCONNECTED';
-  io.emit('status', { status: clientStatus });
+  state.status = 'DISCONNECTED';
+  io.emit('status', { status: state.status });
 });
 
 io.on('connection', (socket) => {
-  socket.emit('status', { status: clientStatus, qr: qrCodeData });
+  socket.emit('status', { status: state.status, qr: state.qr });
 
   socket.on('logout', async () => {
     try {
-      console.log('Logging out...');
       await client.logout();
       await client.destroy();
-      clientStatus = 'DISCONNECTED';
-      qrCodeData = null;
-      io.emit('status', { status: clientStatus });
+      state.status = 'DISCONNECTED';
+      state.qr = null;
+      io.emit('status', { status: state.status });
       client.initialize();
     } catch (err) {
-      console.error('Logout error:', err);
-      try { await client.destroy(); } catch (e) { }
       client.initialize();
     }
   });
@@ -96,17 +80,12 @@ io.on('connection', (socket) => {
       if (fullPhone.length <= 10 && !fullPhone.startsWith(countryCode)) {
         fullPhone = countryCode + fullPhone;
       }
-      const personalizedMessage = message
-        .replace(/\[Name\]/g, candidate.name)
-        .replace(/\[Link\]/g, groupLink);
-
+      const personalizedMessage = message.replace(/\[Name\]/g, candidate.name).replace(/\[Link\]/g, groupLink);
       try {
-        const chatId = `${fullPhone}@c.us`;
-        await client.sendMessage(chatId, personalizedMessage);
+        await client.sendMessage(`${fullPhone}@c.us`, personalizedMessage);
         io.emit('message-sent', { index: i, status: 'sent' });
-        await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 2000));
+        await new Promise(r => setTimeout(r, 3000 + Math.random() * 2000));
       } catch (err) {
-        console.error(`Failed to send to ${fullPhone}:`, err);
         io.emit('message-sent', { index: i, status: 'error' });
       }
     }
@@ -115,11 +94,8 @@ io.on('connection', (socket) => {
 });
 
 console.log('Initializing WhatsApp client...');
-client.initialize().catch(err => {
-  console.error('CRITICAL: Failed to initialize WhatsApp client:', err);
-});
+client.initialize().catch(e => console.error('Init Error:', e));
 
-const PORT = 3001;
-httpServer.listen(PORT, () => {
-  console.log(`Automation server running on port ${PORT}`);
+httpServer.listen(3001, () => {
+  console.log('Automation server running on port 3001');
 });
